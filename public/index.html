@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organt Overwatch — Web Edition</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; color: #eee; font-family: 'Segoe UI', sans-serif; overflow: hidden; user-select: none; }
+
+  /* ── SPLASH OVERLAY ── */
+  #splashOverlay {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, #130a2a 0%, #03010a 100%);
+    transition: opacity 600ms ease;
+  }
+  #splashOverlay h1 {
+    font-size: 2.8rem; letter-spacing: 8px; color: #c9a0ff;
+    text-shadow: 0 0 30px #8855ff, 0 0 60px #4422aa;
+    margin-bottom: 48px; font-weight: 900;
+  }
+  .splash-spinner {
+    width: 64px; height: 64px;
+    border: 5px solid #2a1a4a;
+    border-top-color: #9966ff;
+    border-right-color: #cc88ff;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+    margin-bottom: 32px;
+    box-shadow: 0 0 20px #8855ff55;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #splashMsg {
+    font-size: 0.85rem; letter-spacing: 4px; color: #9977cc;
+    animation: blink 1.4s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── HERO SELECT ── */
+  #heroSelect {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; background: radial-gradient(ellipse at center, #1a1040 0%, #06030f 100%);
+    z-index: 100;
+  }
+  #heroSelect h1 { font-size: 2.4rem; letter-spacing: 4px; color: #c9a0ff; text-shadow: 0 0 20px #8855ff; margin-bottom: 8px; }
+  #heroSelect p  { color: #888; margin-bottom: 40px; font-size: 0.9rem; letter-spacing: 2px; }
+  .hero-cards { display: flex; gap: 24px; }
+  .hero-card {
+    width: 200px; border: 2px solid #333; border-radius: 12px; padding: 28px 20px;
+    cursor: pointer; transition: all 0.2s; text-align: center; background: #11091f;
+  }
+  .hero-card:hover { border-color: #8855ff; transform: translateY(-6px); box-shadow: 0 12px 40px #8855ff66; }
+  .hero-card .icon { font-size: 3rem; margin-bottom: 12px; }
+  .hero-card h2 { font-size: 1.2rem; letter-spacing: 2px; margin-bottom: 8px; }
+  .hero-card .role { font-size: 0.7rem; color: #888; letter-spacing: 1px; margin-bottom: 14px; }
+  .hero-card .stats { font-size: 0.75rem; color: #aaa; line-height: 1.6; text-align: left; }
+  .hero-card .stats span { color: #c9a0ff; }
+  .tank-card h2 { color: #44aaff; }
+  .dps-card   h2 { color: #ff6644; }
+  .heal-card  h2 { color: #44ffaa; }
+
+  /* ── COUNTDOWN ── */
+  #countdown {
+    position: fixed; inset: 0; display: none; flex-direction: column;
+    align-items: center; justify-content: center; background: #00000088; z-index: 90;
+    pointer-events: none;
+  }
+  #countdown .num { font-size: 8rem; font-weight: 900; color: #fff; text-shadow: 0 0 40px #8855ff; animation: pulse 1s ease-out infinite; }
+  @keyframes pulse { 0%{transform:scale(1.3)} 100%{transform:scale(1)} }
+
+  /* ── GAME OVER ── */
+  #gameOver {
+    position: fixed; inset: 0; display: none; flex-direction: column;
+    align-items: center; justify-content: center; background: #000000bb; z-index: 90;
+  }
+  #gameOver h2 { font-size: 3rem; letter-spacing: 6px; margin-bottom: 16px; }
+  #gameOver .score-line { font-size: 1.4rem; color: #ccc; margin-bottom: 32px; }
+  #gameOver .restart-note { color: #888; font-size: 0.85rem; }
+
+  /* ── CANVAS ── */
+  #gameCanvas { display: block; position: fixed; top: 0; left: 0; }
+
+  /* ── HUD ── */
+  #hud {
+    position: fixed; inset: 0; pointer-events: none; z-index: 50;
+  }
+
+  /* Bottom bar */
+  #bottomBar {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 90px;
+    background: linear-gradient(to top, #000000cc, transparent);
+    display: flex; align-items: center; justify-content: center; gap: 24px;
+  }
+  .skill-slot {
+    width: 56px; height: 56px; border-radius: 8px; background: #222; border: 2px solid #444;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    position: relative; font-size: 1.4rem;
+  }
+  .skill-slot .key { position: absolute; top: 3px; left: 5px; font-size: 0.55rem; color: #888; }
+  .skill-slot .cd-overlay {
+    position: absolute; inset: 0; background: #00000099; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; font-size: 0.8rem; color: #fff;
+  }
+  .ult-slot { width: 68px; height: 68px; border-color: #8855ff; }
+  .ult-slot .ult-bar {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 4px;
+    background: #8855ff; border-radius: 0 0 6px 6px; transition: width 0.1s;
+  }
+
+  /* Self HP bar */
+  #selfHp {
+    position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+    width: 280px; text-align: center;
+  }
+  #selfHp .name { font-size: 0.75rem; color: #bbb; letter-spacing: 2px; margin-bottom: 4px; }
+  .hp-bar-outer { height: 12px; background: #222; border-radius: 6px; overflow: hidden; }
+  .hp-bar-inner { height: 100%; border-radius: 6px; transition: width 0.08s; }
+
+  /* Scoreboard top */
+  #scoreboard {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 20px; background: #00000099; padding: 8px 24px; border-radius: 24px;
+  }
+  .team-score { font-size: 1.6rem; font-weight: 700; }
+  .team0-score { color: #44aaff; }
+  .team1-score { color: #ff4444; }
+  .time-display { font-size: 1rem; color: #ccc; min-width: 60px; text-align: center; }
+
+  /* Kill feed */
+  #killfeed {
+    position: absolute; top: 60px; right: 16px; width: 280px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .kf-entry {
+    background: #00000099; padding: 5px 10px; border-radius: 4px; font-size: 0.78rem;
+    border-left: 3px solid #888; animation: fadeSlide 0.3s ease-out;
+  }
+  @keyframes fadeSlide { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+  .kf-entry.team0 { border-left-color: #44aaff; }
+  .kf-entry.team1 { border-left-color: #ff4444; }
+
+  /* Team HP bars (top left/right) */
+  #teamHp0 { position: absolute; top: 60px; left: 12px; width: 200px; }
+  #teamHp1 { position: absolute; top: 60px; right: 12px; width: 200px; text-align: right; }
+  .team-member-hp { margin-bottom: 8px; }
+  .team-member-hp .m-name { font-size: 0.7rem; color: #aaa; margin-bottom: 2px; }
+  .team-member-hp .hp-bar-outer { height: 8px; }
+
+  /* Respawn countdown */
+  #respawnOverlay {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  #respawnOverlay .box {
+    background: #00000099; padding: 20px 40px; border-radius: 12px; text-align: center;
+  }
+  #respawnOverlay .box h3 { font-size: 1.5rem; color: #ff4444; margin-bottom: 8px; }
+  #respawnOverlay .box p  { color: #ccc; font-size: 2rem; }
+</style>
+</head>
+<body>
+
+<!-- Splash / cold-start loading overlay -->
+<div id="splashOverlay">
+  <h1>ORGANT WATCH</h1>
+  <div class="splash-spinner"></div>
+  <span id="splashMsg">CONNECTING...</span>
+</div>
+
+<!-- Hero select screen -->
+<div id="heroSelect" style="display:none">
+  <h1>ORGANT WATCH</h1>
+  <p>CHOOSE YOUR HERO</p>
+  <div class="hero-cards">
+    <div class="hero-card tank-card" onclick="selectHero('tank')">
+      <div class="icon">🛡️</div>
+      <h2>TANK</h2>
+      <div class="role">FRONTLINE DEFENDER</div>
+      <div class="stats">
+        HP: <span>400</span><br>
+        SPD: <span>180</span><br>
+        ATK: <span>Shockwave (80dmg)</span><br>
+        S1: <span>Shield (50% reduce)</span><br>
+        S2: <span>Dash (100dmg)</span><br>
+        ULT: <span>Quake (100+stun)</span>
+      </div>
+    </div>
+    <div class="hero-card dps-card" onclick="selectHero('dps')">
+      <div class="icon">🔫</div>
+      <h2>DPS</h2>
+      <div class="role">DAMAGE DEALER</div>
+      <div class="stats">
+        HP: <span>200</span><br>
+        SPD: <span>240</span><br>
+        ATK: <span>Bullet (60dmg)</span><br>
+        S1: <span>Scatter (5×40dmg)</span><br>
+        S2: <span>Blink (200px)</span><br>
+        ULT: <span>Snipe (150dmg pierce)</span>
+      </div>
+    </div>
+    <div class="hero-card heal-card" onclick="selectHero('healer')">
+      <div class="icon">💚</div>
+      <h2>HEALER</h2>
+      <div class="role">SUPPORT</div>
+      <div class="stats">
+        HP: <span>250</span><br>
+        SPD: <span>210</span><br>
+        ATK: <span>Beam (±30hp/s)</span><br>
+        S1: <span>Heal Orb (+80hp)</span><br>
+        S2: <span>Invincible 2s</span><br>
+        ULT: <span>Revive (50%HP)</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Countdown overlay -->
+<div id="countdown"><div class="num" id="countdownNum">3</div></div>
+
+<!-- Game over overlay -->
+<div id="gameOver">
+  <h2 id="gameOverTitle">VICTORY</h2>
+  <div class="score-line" id="gameOverScore">Team 0 — 10 kills</div>
+  <div class="restart-note">Game resets in 10s…</div>
+</div>
+
+<!-- Game canvas -->
+<canvas id="gameCanvas"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <!-- Scoreboard -->
+  <div id="scoreboard">
+    <span class="team-score team0-score" id="score0">0</span>
+    <span class="time-display" id="timeDisplay">3:00</span>
+    <span class="team-score team1-score" id="score1">0</span>
+  </div>
+
+  <!-- Kill feed -->
+  <div id="killfeed"></div>
+
+  <!-- Team HP -->
+  <div id="teamHp0"></div>
+  <div id="teamHp1"></div>
+
+  <!-- Respawn -->
+  <div id="respawnOverlay">
+    <div class="box">
+      <h3>YOU DIED</h3>
+      <p id="respawnTimer">8.0</p>
+    </div>
+  </div>
+
+  <!-- Self HP -->
+  <div id="selfHp">
+    <div class="name" id="selfHpName">HERO</div>
+    <div class="hp-bar-outer">
+      <div class="hp-bar-inner" id="selfHpBar" style="width:100%;background:#44ff88"></div>
+    </div>
+  </div>
+
+  <!-- Skill bar -->
+  <div id="bottomBar">
+    <div class="skill-slot" id="slotBasic">
+      <span class="key">LMB</span>
+      <span id="iconBasic">⚔️</span>
+      <div class="cd-overlay" id="cdBasic" style="display:none"></div>
+    </div>
+    <div class="skill-slot" id="slotSkill1">
+      <span class="key">E</span>
+      <span id="iconSkill1">🛡️</span>
+      <div class="cd-overlay" id="cdSkill1" style="display:none"></div>
+    </div>
+    <div class="skill-slot ult-slot" id="slotUlt">
+      <span class="key">R</span>
+      <span id="iconUlt">⚡</span>
+      <div class="ult-bar" id="ultBar" style="width:0%"></div>
+      <div class="cd-overlay" id="cdUlt" style="display:none">0%</div>
+    </div>
+    <div class="skill-slot" id="slotSkill2">
+      <span class="key">Q</span>
+      <span id="iconSkill2">💨</span>
+      <div class="cd-overlay" id="cdSkill2" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+// CLIENT — Overwatch Web
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let ws = null;
+let myId = null;
+let myTeam = null;
+let myHero = null;
+let walls = [];
+let mapSize = { w: 1200, h: 800 };
+
+// Interpolated state
+let serverPlayers = {};
+let serverProjectiles = {};
+let gameState = { phase: 'waiting', timeLeft: 180000, scores: { 0: 0, 1: 0 } };
+
+// Client prediction
+let localPos = { x: 0, y: 0 };
+let localAngle = 0;
+let localHp = 0;
+let localMaxHp = 100;
+let localUltCharge = 0;
+let localSkills = { skill1Cd: 0, skill2Cd: 0 };
+let localStatus = 'alive';
+let localRespawnAt = 0;
+let inputSeq = 0;
+
+// Input
+const keys = {};
+let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+let mouseDown = false;
+
+// Particles / VFX
+let particles = [];
+let hitFlashes = [];
+let hitMarkers    = [];  // 흰색 X 히트마커
+let groundRipples = [];  // Tank quake 지면 파문 링
+let screenShake = { x: 0, y: 0, trauma: 0 };
+let killfeedEntries = [];
+
+// Skills cooldowns local (ms timestamp)
+let cd = { basic: 0, skill1: 0, skill2: 0 };
+
+// Camera
+let camX = 0, camY = 0;
+
+// Hero visuals config
+const HERO_VIS = {
+  tank:   { color: '#44aaff', icon: '🛡️', skill1:'🛡️', skill2:'💥', ult:'🌋', radius: 22, basic:'⚔️' },
+  dps:    { color: '#ff6644', icon: '🔫', skill1:'🌀', skill2:'💨', ult:'🎯', radius: 16, basic:'🔫' },
+  healer: { color: '#44ffaa', icon: '💚', skill1:'💊', skill2:'✨', ult:'🔄', radius: 18, basic:'💚' },
+};
+
+const TEAM_COLORS = ['#44aaff', '#ff4444'];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUDIO ENGINE — Pure Web Audio API synthesis (no external files)
+// Design: every event type has ≥3 pitch/timbre variations to prevent habituation.
+// Variation index is logged so QA can blind-verify via console.
+// ═══════════════════════════════════════════════════════════════════════════════
+let _actx = null;
+function getACtx() {
+  if (!_actx) _actx = new (window.AudioContext || window.webkitAudioContext)();
+  return _actx;
+}
+
+// AudioContext unlock on first pointer interaction (autoplay policy)
+document.addEventListener('pointerdown', () => { try { getACtx().resume(); } catch(_){} }, { once: true });
+
+// Cooldown deduplication — prevents SFX spam on rapid events
+const _audioCd = {};
+function playOnce(key, fn, ms) {
+  const n = Date.now();
+  if (_audioCd[key] && n < _audioCd[key]) return;
+  _audioCd[key] = n + (ms || 80);
+  fn();
+}
+
+// Variation counter per event key — 3-cycle for anti-habituation
+const _varIdx = {};
+function nextVar(key) {
+  _varIdx[key] = ((_varIdx[key] || 0) + 1) % 3;
+  return _varIdx[key];
+}
+
+// Utility: create white noise buffer of given duration (seconds)
+function makeNoise(ac, duration) {
+  const bufLen = Math.ceil(ac.sampleRate * duration);
+  const buf = ac.createBuffer(1, bufLen, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+  return buf;
+}
+
+// Utility: gentle distortion waveshaper for metallic texture
+function makeDistCurve(amount) {
+  const n = 256;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    curve[i] = (Math.PI + amount) * x / (Math.PI + amount * Math.abs(x));
+  }
+  return curve;
+}
+
+// ── 1. playShoot(heroClass) ──────────────────────────────────────────────────
+// Tank : low sub-thud (sine 90→40Hz + low noise)
+// DPS  : noise burst gunshot (bandpass noise + square click transient)
+// Healer: short high sine tick (800Hz)
+function playShoot(heroClass) {
+  try {
+    const ac = getACtx();
+    if (ac.state !== 'running') return;
+    const v = nextVar('shoot_' + heroClass);
+    const pitchMult = [1.0, 0.94, 1.08][v];
+    const t = ac.currentTime;
+
+    if (heroClass === 'tank') {
+      // Sub-thud: sine with pitch drop
+      const osc = ac.createOscillator();
+      const g   = ac.createGain();
+      osc.connect(g); g.connect(ac.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(90 * pitchMult, t);
+      osc.frequency.exponentialRampToValueAtTime(38, t + 0.14);
+      g.gain.setValueAtTime(0.55, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      osc.start(t); osc.stop(t + 0.22);
+      // Body noise punch
+      const nb = makeNoise(ac, 0.09);
+      const ns = ac.createBufferSource();
+      const nf = ac.createBiquadFilter();
+      const ng = ac.createGain();
+      ns.buffer = nb; nf.type = 'lowpass'; nf.frequency.value = 280;
+      ns.connect(nf); nf.connect(ng); ng.connect(ac.destination);
+      ng.gain.setValueAtTime(0.35, t);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+      ns.start(t); ns.stop(t + 0.12);
+
+    } else if (heroClass === 'dps') {
+      // Bandpass noise burst — gunshot body
+      const nb  = makeNoise(ac, 0.16);
+      const ns  = ac.createBufferSource();
+      const nf  = ac.createBiquadFilter();
+      const ng  = ac.createGain();
+      ns.buffer = nb; nf.type = 'bandpass';
+      nf.frequency.value = 1400 * pitchMult; nf.Q.value = 0.6;
+      ns.connect(nf); nf.connect(ng); ng.connect(ac.destination);
+      ng.gain.setValueAtTime(0.65, t);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+      ns.start(t); ns.stop(t + 0.17);
+      // Square transient click
+      const osc = ac.createOscillator();
+      const g2  = ac.createGain();
+      osc.connect(g2); g2.connect(ac.destination);
+      osc.type = 'square'; osc.frequency.value = 200 * pitchMult;
+      g2.gain.setValueAtTime(0.3, t);
+      g2.gain.exponentialRampToValueAtTime(0.001, t + 0.025);
+      osc.start(t); osc.stop(t + 0.03);
+
+    } else { // healer
+      // High sine tick — beam zap
+      const osc = ac.createOscillator();
+      const g   = ac.createGain();
+      osc.connect(g); g.connect(ac.destination);
+      osc.type = 'sine'; osc.frequency.value = 820 * pitchMult;
+      g.gain.setValueAtTime(0.18, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.055);
+      osc.start(t); osc.stop(t + 0.07);
+    }
+    console.log(`[SFX] shoot(${heroClass}) var=${v}`);
+  } catch(e) { console.warn('[SFX] playShoot err', e); }
+}
+
+// ── 2. playHit() ─────────────────────────────────────────────────────────────
+// Metallic clank: sawtooth pair + waveshaper distortion + hp noise transient
+function playHit() {
+  try {
+    const ac = getACtx();
+    if (ac.state !== 'running') return;
+    const v = nextVar('hit');
+    const pm = [1.0, 1.18, 0.85][v];
+    const t = ac.currentTime;
+
+    const osc1 = ac.createOscillator();
+    const osc2 = ac.createOscillator();
+    const dist  = ac.createWaveShaper();
+    const g     = ac.createGain();
+    dist.curve  = makeDistCurve(280);
+    osc1.connect(dist); osc2.connect(dist); dist.connect(g); g.connect(ac.destination);
+    osc1.type = 'sawtooth'; osc1.frequency.value = 430 * pm;
+    osc2.type = 'sawtooth'; osc2.frequency.value = 659 * pm;
+    g.gain.setValueAtTime(0.32, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    osc1.start(t); osc1.stop(t + 0.16);
+    osc2.start(t); osc2.stop(t + 0.16);
+
+    // High-pass noise for impact crunch
+    const nb = makeNoise(ac, 0.05);
+    const ns = ac.createBufferSource();
+    const nf = ac.createBiquadFilter();
+    const ng = ac.createGain();
+    ns.buffer = nb; nf.type = 'highpass'; nf.frequency.value = 2200;
+    ns.connect(nf); nf.connect(ng); ng.connect(ac.destination);
+    ng.gain.setValueAtTime(0.42, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.065);
+    ns.start(t); ns.stop(t + 0.07);
+    console.log(`[SFX] hit var=${v}`);
+  } catch(e) { console.warn('[SFX] playHit err', e); }
+}
+
+// ── 3. playDeath() ───────────────────────────────────────────────────────────
+// Explosion boom: sub-bass sine drop + broadband noise decay + crack transient
+function playDeath() {
+  try {
+    const ac = getACtx();
+    if (ac.state !== 'running') return;
+    const v = nextVar('death');
+    const pm = [1.0, 0.88, 1.12][v];
+    const t  = ac.currentTime;
+
+    // Sub-bass drop
+    const osc = ac.createOscillator();
+    const og  = ac.createGain();
+    osc.connect(og); og.connect(ac.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(65 * pm, t);
+    osc.frequency.exponentialRampToValueAtTime(22, t + 0.45);
+    og.gain.setValueAtTime(0.72, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+    osc.start(t); osc.stop(t + 0.58);
+
+    // Main noise explosion body
+    const nb = makeNoise(ac, 0.65);
+    const ns = ac.createBufferSource();
+    const nf = ac.createBiquadFilter();
+    const ng = ac.createGain();
+    ns.buffer = nb; nf.type = 'lowpass';
+    nf.frequency.setValueAtTime(5000, t);
+    nf.frequency.exponentialRampToValueAtTime(250, t + 0.5);
+    ns.connect(nf); nf.connect(ng); ng.connect(ac.destination);
+    ng.gain.setValueAtTime(0.82, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+    ns.start(t); ns.stop(t + 0.68);
+
+    // High crack transient at onset
+    const nb2 = makeNoise(ac, 0.05);
+    const ns2 = ac.createBufferSource();
+    const nf2 = ac.createBiquadFilter();
+    const ng2 = ac.createGain();
+    ns2.buffer = nb2; nf2.type = 'highpass'; nf2.frequency.value = 3500;
+    ns2.connect(nf2); nf2.connect(ng2); ng2.connect(ac.destination);
+    ng2.gain.setValueAtTime(0.55, t);
+    ng2.gain.exponentialRampToValueAtTime(0.001, t + 0.065);
+    ns2.start(t); ns2.stop(t + 0.07);
+    console.log(`[SFX] death var=${v}`);
+  } catch(e) { console.warn('[SFX] playDeath err', e); }
+}
+
+// ── 4. playUlt(heroClass) ────────────────────────────────────────────────────
+// Tank  : low rumble (noise+deep sine)
+// DPS   : whine sweep up + crack burst
+// Healer: ascending C-E-G chord (staggered sine trio)
+function playUlt(heroClass) {
+  try {
+    const ac = getACtx();
+    if (ac.state !== 'running') return;
+    const v  = nextVar('ult_' + heroClass);
+    const pm = [1.0, 0.94, 1.06][v];
+    const t  = ac.currentTime;
+
+    if (heroClass === 'tank') {
+      // Rumble noise
+      const nb = makeNoise(ac, 1.1);
+      const ns = ac.createBufferSource();
+      const nf = ac.createBiquadFilter();
+      const ng = ac.createGain();
+      ns.buffer = nb; nf.type = 'lowpass'; nf.frequency.value = 180;
+      ns.connect(nf); nf.connect(ng); ng.connect(ac.destination);
+      ng.gain.setValueAtTime(0.0, t);
+      ng.gain.linearRampToValueAtTime(0.62, t + 0.12);
+      ng.gain.setValueAtTime(0.62, t + 0.65);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
+      ns.start(t); ns.stop(t + 1.15);
+      // Deep sine throb
+      const osc = ac.createOscillator();
+      const og  = ac.createGain();
+      osc.connect(og); og.connect(ac.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(28 * pm, t);
+      osc.frequency.linearRampToValueAtTime(48, t + 0.5);
+      osc.frequency.linearRampToValueAtTime(18, t + 1.0);
+      og.gain.setValueAtTime(0.5, t);
+      og.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
+      osc.start(t); osc.stop(t + 1.15);
+
+    } else if (heroClass === 'dps') {
+      // Rising sawtooth whine
+      const osc = ac.createOscillator();
+      const g   = ac.createGain();
+      osc.connect(g); g.connect(ac.destination);
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(180 * pm, t);
+      osc.frequency.exponentialRampToValueAtTime(2200 * pm, t + 0.42);
+      g.gain.setValueAtTime(0.28, t);
+      g.gain.setValueAtTime(0.42, t + 0.38);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.48);
+      osc.start(t); osc.stop(t + 0.52);
+      // Crack burst at peak
+      const nb = makeNoise(ac, 0.12);
+      const ns = ac.createBufferSource();
+      const nf = ac.createBiquadFilter();
+      const ng = ac.createGain();
+      ns.buffer = nb; nf.type = 'bandpass';
+      nf.frequency.value = 3200; nf.Q.value = 1.5;
+      ns.connect(nf); nf.connect(ng); ng.connect(ac.destination);
+      ng.gain.setValueAtTime(0.0, t + 0.36);
+      ng.gain.linearRampToValueAtTime(0.65, t + 0.4);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+      ns.start(t + 0.36); ns.stop(t + 0.58);
+
+    } else { // healer
+      // Ascending C-E-G chord — each voice staggered by 80ms
+      const baseFreqs = [261.63, 329.63, 392.00];
+      const highFreqs = [523.25, 659.26, 783.99];
+      for (let i = 0; i < 3; i++) {
+        const delay = i * 0.08;
+        const osc = ac.createOscillator();
+        const g   = ac.createGain();
+        osc.connect(g); g.connect(ac.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(baseFreqs[i] * pm, t + delay);
+        osc.frequency.linearRampToValueAtTime(highFreqs[i] * pm, t + delay + 0.5);
+        g.gain.setValueAtTime(0.0, t + delay);
+        g.gain.linearRampToValueAtTime(0.22, t + delay + 0.06);
+        g.gain.setValueAtTime(0.22, t + delay + 0.45);
+        g.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.85);
+        osc.start(t + delay); osc.stop(t + delay + 0.9);
+      }
+    }
+    console.log(`[SFX] ult(${heroClass}) var=${v}`);
+  } catch(e) { console.warn('[SFX] playUlt err', e); }
+}
+
+// ── 5. playCountdown(n) ──────────────────────────────────────────────────────
+// Regular beats: 440Hz sine blip. GO: ascending 800→1200Hz fanfare, longer.
+function playCountdown(n) {
+  try {
+    const ac = getACtx();
+    if (ac.state !== 'running') return;
+    const t   = ac.currentTime;
+    const isGo = (n === 'GO' || n === 0 || n === '0' || n <= 0);
+
+    const osc = ac.createOscillator();
+    const g   = ac.createGain();
+    osc.connect(g); g.connect(ac.destination);
+    osc.type = 'sine';
+
+    if (isGo) {
+      osc.frequency.setValueAtTime(800, t);
+      osc.frequency.linearRampToValueAtTime(1200, t + 0.18);
+      g.gain.setValueAtTime(0.52, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+      osc.start(t); osc.stop(t + 0.42);
+      // Harmony fifth above
+      const osc2 = ac.createOscillator();
+      const g2   = ac.createGain();
+      osc2.connect(g2); g2.connect(ac.destination);
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1200, t);
+      osc2.frequency.linearRampToValueAtTime(1800, t + 0.18);
+      g2.gain.setValueAtTime(0.28, t);
+      g2.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+      osc2.start(t); osc2.stop(t + 0.42);
+    } else {
+      osc.frequency.value = 440;
+      g.gain.setValueAtTime(0.36, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      osc.start(t); osc.stop(t + 0.22);
+    }
+    console.log(`[SFX] countdown(${n}) isGo=${isGo}`);
+  } catch(e) { console.warn('[SFX] playCountdown err', e); }
+}
+
+// ── 6. playHeal() ────────────────────────────────────────────────────────────
+// Heal tick: short sine sweep 400→800Hz (soft, positive feel)
+function playHeal() {
+  try {
+    const ac = getACtx();
+    if (ac.state !== 'running') return;
+    const v  = nextVar('heal');
+    const pm = [1.0, 1.12, 0.9][v];
+    const t  = ac.currentTime;
+
+    const osc = ac.createOscillator();
+    const g   = ac.createGain();
+    osc.connect(g); g.connect(ac.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(400 * pm, t);
+    osc.frequency.exponentialRampToValueAtTime(820 * pm, t + 0.09);
+    g.gain.setValueAtTime(0.16, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+    osc.start(t); osc.stop(t + 0.13);
+    console.log(`[SFX] heal var=${v}`);
+  } catch(e) { console.warn('[SFX] playHeal err', e); }
+}
+// ── END AUDIO ENGINE ──────────────────────────────────────────────────────────
+
+// ── Hero select ────────────────────────────────────────────────────────────────
+function selectHero(hero) {
+  myHero = hero;
+  document.getElementById('heroSelect').style.display = 'none';
+  connectWS(hero);
+  updateSkillIcons(hero);
+}
+
+function updateSkillIcons(hero) {
+  const vis = HERO_VIS[hero];
+  document.getElementById('iconBasic').textContent  = vis.basic;
+  document.getElementById('iconSkill1').textContent = vis.skill1;
+  document.getElementById('iconSkill2').textContent = vis.skill2;
+  document.getElementById('iconUlt').textContent    = vis.ult;
+  document.getElementById('selfHpName').textContent = hero.toUpperCase();
+}
+
+// ── WebSocket ──────────────────────────────────────────────────────────────────
+function connectWS(hero) {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}`);
+
+  ws.onopen = () => {
+    console.log('[WS] Connected');
+    ws.send(JSON.stringify({ type: 'selectHero', heroClass: hero }));
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleServerMsg(msg);
+  };
+
+  ws.onclose = () => {
+    console.log('[WS] Closed — reconnect in 2s');
+    setTimeout(() => connectWS(myHero), 2000);
+  };
+}
+
+function handleServerMsg(msg) {
+  switch (msg.type) {
+    case 'init':
+      myId   = msg.playerId;
+      myTeam = msg.team;
+      walls  = msg.walls || [];
+      if (msg.mapSize) mapSize = msg.mapSize;
+      console.log('[Game] Init:', myId, 'team', myTeam);
+      break;
+
+    case 'snapshot': {
+      // Update server state
+      serverPlayers     = {};
+      serverProjectiles = {};
+      for (const p of msg.players) serverPlayers[p.id] = p;
+      for (const p of msg.projectiles) serverProjectiles[p.id] = p;
+      if (msg.gameState) {
+        gameState = msg.gameState;
+        updateHUD();
+      }
+
+      // Reconcile local player
+      const me = serverPlayers[myId];
+      if (me) {
+        // Server reconciliation — trust server position (no lag compensation here)
+        localPos       = { x: me.position.x, y: me.position.y };
+        localHp        = me.hp;
+        localMaxHp     = me.maxHp;
+        localUltCharge = me.ultCharge;
+        localSkills    = me.skills;
+        localStatus    = me.status;
+        localRespawnAt = me.respawnAt;
+      }
+
+      // Process events
+      for (const ev of msg.events || []) {
+        processEvent(ev);
+      }
+      break;
+    }
+
+    case 'gameState':
+      gameState.phase = msg.phase;
+      if (msg.scores)   gameState.scores   = msg.scores;
+      if (msg.timeLeft !== undefined) gameState.timeLeft = msg.timeLeft;
+      handlePhase(msg);
+      break;
+  }
+}
+
+function handlePhase(msg) {
+  if (msg.phase === 'countdown') {
+    document.getElementById('countdown').style.display = 'flex';
+    document.getElementById('countdownNum').textContent = msg.countdown || '…';
+    playCountdown(msg.countdown); // SFX hook: countdown beep / GO fanfare
+  } else if (msg.phase === 'playing') {
+    document.getElementById('countdown').style.display = 'none';
+    document.getElementById('gameOver').style.display  = 'none';
+  } else if (msg.phase === 'ended') {
+    document.getElementById('countdown').style.display = 'none';
+    showGameOver(msg);
+  } else if (msg.phase === 'waiting') {
+    document.getElementById('countdown').style.display = 'none';
+    document.getElementById('gameOver').style.display  = 'none';
+  }
+}
+
+function showGameOver(msg) {
+  const s0 = (gameState.scores && gameState.scores[0]) || 0;
+  const s1 = (gameState.scores && gameState.scores[1]) || 0;
+  const winner = msg.winner;
+  const go = document.getElementById('gameOver');
+  go.style.display = 'flex';
+  const title = document.getElementById('gameOverTitle');
+  if (winner === myTeam) {
+    title.textContent = '🏆 VICTORY';
+    title.style.color = '#44ffaa';
+  } else {
+    title.textContent = '💀 DEFEAT';
+    title.style.color = '#ff4444';
+  }
+  document.getElementById('gameOverScore').textContent = `Blue ${s0} — ${s1} Red`;
+}
+
+// ── HUD update ─────────────────────────────────────────────────────────────────
+function updateHUD() {
+  // Scoreboard
+  document.getElementById('score0').textContent = (gameState.scores && gameState.scores[0]) || 0;
+  document.getElementById('score1').textContent = (gameState.scores && gameState.scores[1]) || 0;
+  const secs = Math.max(0, Math.round((gameState.timeLeft || 0) / 1000));
+  const m = Math.floor(secs / 60);
+  const s = String(secs % 60).padStart(2, '0');
+  document.getElementById('timeDisplay').textContent = `${m}:${s}`;
+
+  // Self HP
+  const hpPct = localMaxHp > 0 ? (localHp / localMaxHp * 100) : 0;
+  document.getElementById('selfHpBar').style.width = hpPct + '%';
+  document.getElementById('selfHpBar').style.background = hpPct > 60 ? '#44ff88' : hpPct > 30 ? '#ffaa22' : '#ff3344';
+
+  // Ult
+  document.getElementById('ultBar').style.width = localUltCharge + '%';
+  const cdUlt = document.getElementById('cdUlt');
+  if (localUltCharge < 100) {
+    cdUlt.style.display = 'flex';
+    cdUlt.textContent = Math.round(localUltCharge) + '%';
+  } else {
+    cdUlt.style.display = 'none';
+  }
+
+  // Skill cooldowns
+  const now2 = Date.now();
+  const cdSkill1 = document.getElementById('cdSkill1');
+  const cdSkill2 = document.getElementById('cdSkill2');
+  if (localSkills.skill1Cd > 0) {
+    cdSkill1.style.display = 'flex';
+    cdSkill1.textContent = (localSkills.skill1Cd / 1000).toFixed(1) + 's';
+  } else { cdSkill1.style.display = 'none'; }
+  if (localSkills.skill2Cd > 0) {
+    cdSkill2.style.display = 'flex';
+    cdSkill2.textContent = (localSkills.skill2Cd / 1000).toFixed(1) + 's';
+  } else { cdSkill2.style.display = 'none'; }
+
+  // Respawn
+  const ro = document.getElementById('respawnOverlay');
+  if (localStatus === 'dead') {
+    ro.style.display = 'flex';
+    const remaining = Math.max(0, (localRespawnAt - Date.now()) / 1000);
+    document.getElementById('respawnTimer').textContent = remaining.toFixed(1) + 's';
+  } else {
+    ro.style.display = 'none';
+  }
+
+  // Team HP bars
+  updateTeamHp();
+}
+
+function updateTeamHp() {
+  const div0 = document.getElementById('teamHp0');
+  const div1 = document.getElementById('teamHp1');
+  div0.innerHTML = '';
+  div1.innerHTML = '';
+
+  for (const p of Object.values(serverPlayers)) {
+    if (p.id === myId) continue;
+    const pct = p.maxHp > 0 ? (p.hp / p.maxHp * 100) : 0;
+    const color = p.team === 0 ? '#44aaff' : '#ff4444';
+    const div = document.createElement('div');
+    div.className = 'team-member-hp';
+    div.innerHTML = `
+      <div class="m-name">${p.heroClass.toUpperCase()} ${p.status === 'dead' ? '💀' : ''}</div>
+      <div class="hp-bar-outer">
+        <div class="hp-bar-inner" style="width:${pct}%;background:${color}"></div>
+      </div>`;
+    if (p.team === 0) div0.appendChild(div);
+    else              div1.appendChild(div);
+  }
+}
+
+// ── Kill feed ──────────────────────────────────────────────────────────────────
+const HERO_EMOJIS = { tank: '🛡️', dps: '🔫', healer: '💚' };
+
+function addKillFeed(text, teamClass) {
+  const kf = document.getElementById('killfeed');
+  const el = document.createElement('div');
+  el.className = 'kf-entry ' + (teamClass || '');
+  el.textContent = text;
+  kf.prepend(el);
+  killfeedEntries.push(el);
+  if (killfeedEntries.length > 6) {
+    killfeedEntries.shift().remove();
+  }
+  setTimeout(() => el.remove(), 5000);
+}
+
+function processEvent(ev) {
+  if (ev.type === 'kill') {
+    const killer = serverPlayers[ev.killerId];
+    const victim = serverPlayers[ev.victimId];
+    const kName = killer ? killer.heroClass.toUpperCase() : '???';
+    const vName = victim ? victim.heroClass.toUpperCase() : '???';
+    const teamClass = killer ? 'team' + killer.team : '';
+    addKillFeed(`${kName} ⚔️ ${vName}`, teamClass);
+
+    // Hit flash
+    if (ev.victimId === myId) {
+      screenShake.trauma = Math.min(1, screenShake.trauma + 0.8);
+    }
+    // Particles + SFX
+    if (victim) {
+      spawnDeathParticles(victim.position.x, victim.position.y, victim.team);
+      playDeath(); // SFX hook: explosion boom on death
+    }
+  }
+  if (ev.type === 'hit') {
+    const target = serverPlayers[ev.targetId];
+    if (target) spawnHitParticle(target.position.x, target.position.y, ev.dmg, target.heroClass);
+    if (ev.targetId === myId && ev.dmg > 0) {
+      screenShake.trauma = Math.min(1, screenShake.trauma + 0.3);
+    }
+  }
+  if (ev.type === 'ult') {
+    const caster = serverPlayers[ev.casterId];
+    if (caster) {
+      spawnUltParticles(caster.position.x, caster.position.y, caster.heroClass);
+      playUlt(caster.heroClass); // SFX hook: ult activation sound per hero
+    }
+  }
+  if (ev.type === 'heal') {
+    playOnce('heal', playHeal, 200); // SFX hook: healer beam heal tick
+  }
+  if (ev.type === 'respawn') {
+    const p = serverPlayers[ev.playerId];
+    if (p) spawnRespawnParticles(p.position.x, p.position.y, p.team);
+  }
+}
+
+// ── Particle system ────────────────────────────────────────────────────────────
+function spawnParticles(x, y, count, opts) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = (opts.minSpeed || 20) + Math.random() * (opts.maxSpeed || 80);
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: 0.02 + Math.random() * 0.04,
+      size: (opts.minSize || 2) + Math.random() * (opts.maxSize || 4),
+      color: opts.colors ? opts.colors[Math.floor(Math.random() * opts.colors.length)] : '#fff',
+      glow: opts.glow || false,
+    });
+  }
+}
+
+function spawnHitParticle(x, y, dmg, heroClass) {
+  // 히어로 색상에 맞는 파티클 버스트
+  const heroColors = {
+    tank:   ['#44aaff', '#aaddff', '#ffffff'],
+    dps:    ['#ff6644', '#ffaa44', '#ffee88'],
+    healer: ['#44ffaa', '#88ffcc', '#ffffff'],
+  };
+  const colors = heroColors[heroClass] || ['#ffcc44', '#ff8822', '#ff4444'];
+  spawnParticles(x, y, 6, { colors, minSize: 2, maxSize: 6, minSpeed: 30, maxSpeed: 130, glow: true });
+  hitFlashes.push({ x, y, life: 1, dmg: Math.round(dmg) });
+  // 흰색 X 히트마커
+  hitMarkers.push({ x, y, life: 1 });
+  playOnce('hit', playHit, 80); // SFX hook: metallic clank on hit
+}
+
+function spawnDeathParticles(x, y, team) {
+  const color = team === 0 ? '#44aaff' : '#ff4444';
+  spawnParticles(x, y, 20, { colors: [color, '#fff', '#888'], minSize: 3, maxSize: 8, minSpeed: 50, maxSpeed: 200, glow: true });
+}
+
+function spawnUltParticles(x, y, heroClass) {
+  const vis = HERO_VIS[heroClass] || {};
+  const colors = {
+    tank: ['#44aaff', '#aaddff', '#ffffff'],
+    dps:  ['#ff6644', '#ffaa22', '#ffee88'],
+    healer: ['#44ffaa', '#88ffcc', '#ffffff'],
+  }[heroClass] || ['#ffffff'];
+  spawnParticles(x, y, 40, { colors, minSize: 3, maxSize: 10, minSpeed: 60, maxSpeed: 300, glow: true });
+  // Tank quake: 3중 지면 파문 링 (staggered)
+  if (heroClass === 'tank') {
+    for (let i = 0; i < 3; i++) {
+      groundRipples.push({
+        x, y,
+        radius: 8,
+        maxRadius: 90 + i * 55,
+        life: 1,
+        delay: i * 0.12,
+        color: '#44aaff',
+      });
+    }
+  }
+}
+
+function spawnRespawnParticles(x, y, team) {
+  const color = team === 0 ? '#44aaff' : '#ff4444';
+  spawnParticles(x, y, 12, { colors: [color, '#ffffff'], minSize: 2, maxSize: 6, minSpeed: 20, maxSpeed: 100 });
+}
+
+// ── Input ──────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','e','q','r','f'].includes(e.key)) return;
+  keys[e.key.toLowerCase()] = true;
+});
+document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+canvas.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+canvas.addEventListener('mousedown', e => { if (e.button === 0) mouseDown = true; });
+canvas.addEventListener('mouseup',   e => { if (e.button === 0) mouseDown = false; });
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// ── Input loop (client prediction) ────────────────────────────────────────────
+const FIXED_DT = 1 / 20; // match server tick
+
+function sendInput() {
+  if (!ws || ws.readyState !== 1 || !myId || gameState.phase !== 'playing') return;
+  if (localStatus !== 'alive') return;
+
+  // Movement vector
+  let mx = 0, my = 0;
+  if (keys['a'] || keys['arrowleft'])  mx -= 1;
+  if (keys['d'] || keys['arrowright']) mx += 1;
+  if (keys['w'] || keys['arrowup'])    my -= 1;
+  if (keys['s'] || keys['arrowdown'])  my += 1;
+
+  // Aim angle from mouse relative to canvas center
+  const scaleX = canvas.width  / mapSize.w;
+  const scaleY = canvas.height / mapSize.h;
+  const scale  = Math.min(scaleX, scaleY);
+  const offX   = (canvas.width  - mapSize.w * scale) / 2;
+  const offY   = (canvas.height - mapSize.h * scale) / 2;
+
+  const worldMouseX = (mouse.x - offX) / scale;
+  const worldMouseY = (mouse.y - offY) / scale;
+  const aimAngle = Math.atan2(worldMouseY - localPos.y, worldMouseX - localPos.x);
+
+  // Client-side prediction — apply movement immediately
+  if (mx !== 0 || my !== 0) {
+    const len = Math.sqrt(mx * mx + my * my);
+    const spd = getHeroSpeed(myHero);
+    localPos.x += (mx / len) * spd * FIXED_DT;
+    localPos.y += (my / len) * spd * FIXED_DT;
+    // Clamp to map bounds (rough)
+    localPos.x = Math.max(16, Math.min(mapSize.w - 16, localPos.x));
+    localPos.y = Math.max(16, Math.min(mapSize.h - 16, localPos.y));
+  }
+
+  localAngle = aimAngle;
+
+  // Action
+  let action = null;
+  const now2 = Date.now();
+  if (mouseDown && now2 >= cd.basic) {
+    action = { type: 'basic' };
+    cd.basic = now2 + getBasicCd(myHero);
+    playOnce('shoot_' + myHero, () => playShoot(myHero), 100); // SFX hook: shoot sound per hero class
+  } else if (keys['e'] && now2 >= cd.skill1) {
+    action = { type: 'skill1' };
+    cd.skill1 = now2 + getSkill1Cd(myHero);
+    keys['e'] = false;
+  } else if (keys['q'] && now2 >= cd.skill2) {
+    action = { type: 'skill2' };
+    cd.skill2 = now2 + getSkill2Cd(myHero);
+    keys['q'] = false;
+  } else if (keys['r'] && localUltCharge >= 100) {
+    action = { type: 'ult' };
+    keys['r'] = false;
+  }
+
+  ws.send(JSON.stringify({
+    seq:       ++inputSeq,
+    timestamp: now2,
+    move:      { x: mx, y: my },
+    aim:       aimAngle,
+    action,
+  }));
+}
+
+function getHeroSpeed(h) { return { tank: 180, dps: 240, healer: 210 }[h] || 200; }
+function getBasicCd(h)   { return { tank: 500, dps: 300, healer: 100 }[h] || 300; }
+function getSkill1Cd(h)  { return { tank: 8000, dps: 5000, healer: 5000 }[h] || 5000; }
+function getSkill2Cd(h)  { return { tank: 10000, dps: 8000, healer: 12000 }[h] || 8000; }
+
+setInterval(sendInput, 50); // 20Hz input
+
+// ── Render ─────────────────────────────────────────────────────────────────────
+let lastRenderTime = performance.now();
+
+function render(now2) {
+  requestAnimationFrame(render);
+  const dt = (now2 - lastRenderTime) / 1000;
+  lastRenderTime = now2;
+
+  // Screen shake
+  if (screenShake.trauma > 0) {
+    screenShake.trauma = Math.max(0, screenShake.trauma - dt * 2);
+    const mag = screenShake.trauma * screenShake.trauma * 12;
+    screenShake.x = (Math.random() * 2 - 1) * mag;
+    screenShake.y = (Math.random() * 2 - 1) * mag;
+  } else {
+    screenShake.x = 0; screenShake.y = 0;
+  }
+
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Scale & center map
+  const scaleX = W / mapSize.w;
+  const scaleY = H / mapSize.h;
+  const scale  = Math.min(scaleX, scaleY);
+  const offX   = (W - mapSize.w * scale) / 2 + screenShake.x;
+  const offY   = (H - mapSize.h * scale) / 2 + screenShake.y;
+
+  ctx.save();
+  ctx.translate(offX, offY);
+  ctx.scale(scale, scale);
+
+  drawBackground();
+  drawWalls();
+  drawGroundRipples(dt);  // 지면 이펙트 (플레이어 아래 레이어)
+  drawProjectiles();
+  drawPlayers();
+  drawParticles(dt);
+  drawHitFlashes(dt);
+  drawHitMarkers(dt);     // 히트마커 최전면
+
+  ctx.restore();
+
+  // Update HUD text
+  updateHUD();
+}
+
+function drawBackground() {
+  // Grid
+  ctx.fillStyle = '#0d1020';
+  ctx.fillRect(0, 0, mapSize.w, mapSize.h);
+  ctx.strokeStyle = '#161830';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < mapSize.w; x += 60) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, mapSize.h); ctx.stroke();
+  }
+  for (let y = 0; y < mapSize.h; y += 60) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(mapSize.w, y); ctx.stroke();
+  }
+  // Center line
+  ctx.strokeStyle = '#ffffff11';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(mapSize.w / 2, 0); ctx.lineTo(mapSize.w / 2, mapSize.h); ctx.stroke();
+
+  // Spawn zones
+  ctx.fillStyle = '#44aaff08';
+  ctx.fillRect(0, 0, 140, mapSize.h);
+  ctx.fillStyle = '#ff444408';
+  ctx.fillRect(mapSize.w - 140, 0, 140, mapSize.h);
+}
+
+function drawWalls() {
+  for (const w of walls) {
+    // Shadow
+    ctx.fillStyle = '#000000aa';
+    ctx.fillRect(w.x + 4, w.y + 4, w.w, w.h);
+    // Wall body
+    const grad = ctx.createLinearGradient(w.x, w.y, w.x + w.w, w.y + w.h);
+    grad.addColorStop(0, '#3a3a5c');
+    grad.addColorStop(1, '#1e1e38');
+    ctx.fillStyle = grad;
+    ctx.fillRect(w.x, w.y, w.w, w.h);
+    // Highlight top/left
+    ctx.strokeStyle = '#5555aa55';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(w.x, w.y, w.w, w.h);
+  }
+}
+
+function drawProjectiles() {
+  for (const proj of Object.values(serverProjectiles)) {
+    const x = proj.position.x, y = proj.position.y;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(proj.angle);
+
+    if (proj.type === 'bullet' || proj.type === 'scatter') {
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#ff8844';
+      ctx.fillStyle = '#ffcc66';
+      ctx.beginPath(); ctx.ellipse(0, 0, 8, 4, 0, 0, Math.PI * 2); ctx.fill();
+    } else if (proj.type === 'snipe') {
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = '#ff2200';
+      ctx.fillStyle = '#ff8800';
+      ctx.beginPath(); ctx.ellipse(0, 0, 20, 3, 0, 0, Math.PI * 2); ctx.fill();
+    } else if (proj.type === 'healorb') {
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#44ffaa';
+      ctx.fillStyle = '#44ffaa';
+      ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function drawPlayers() {
+
+  for (const p of Object.values(serverPlayers)) {
+    if (p.status === 'dead') continue;
+    const vis = HERO_VIS[p.heroClass] || HERO_VIS.dps;
+    const isSelf = p.id === myId;
+    const x = isSelf ? localPos.x : p.position.x;
+    const y = isSelf ? localPos.y : p.position.y;
+    const angle = isSelf ? localAngle : p.angle;
+    const r = vis.radius;
+    const teamColor = TEAM_COLORS[p.team] || '#ffffff';
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    // ── 상태 링: 실드/무적 ────────────────────────────────────────────────
+    if (p.shield) {
+      ctx.strokeStyle = '#44aaff88';
+      ctx.lineWidth = 6;
+      ctx.shadowBlur = 18; ctx.shadowColor = '#44aaff';
+      ctx.beginPath(); ctx.arc(0, 0, r + 10, 0, Math.PI * 2); ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+    if (p.invincible) {
+      ctx.strokeStyle = '#ffffffaa';
+      ctx.lineWidth = 4;
+      ctx.shadowBlur = 22; ctx.shadowColor = '#ffffff';
+      ctx.beginPath(); ctx.arc(0, 0, r + 15, 0, Math.PI * 2); ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // ── 팀 글로우 ─────────────────────────────────────────────────────────
+    ctx.shadowBlur = isSelf ? 24 : 12;
+    ctx.shadowColor = teamColor;
+    ctx.strokeStyle = teamColor;
+    ctx.lineWidth = isSelf ? 3 : 2;
+    ctx.fillStyle = vis.color;
+
+    // ── 히어로별 실루엣 ───────────────────────────────────────────────────
+    if (p.heroClass === 'tank') {
+      // 헥사곤 방패 — 크고 위압적인 6각형 (radius 22)
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
+        const px = Math.cos(a) * r, py = Math.sin(a) * r;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // 내부 작은 헥사곤 디테일
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#aaddff55';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
+        const px = Math.cos(a) * (r * 0.52), py = Math.sin(a) * (r * 0.52);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      // 중앙 보스 리벳
+      ctx.fillStyle = '#aaddff55';
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+    } else if (p.heroClass === 'dps') {
+      // 화살촉 삼각형 — 조준 방향으로 날렵하게 회전 (radius 16)
+      ctx.save();
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(r + 4, 0);               // 앞 뾰족한 끝
+      ctx.lineTo(-r * 0.72, -r * 0.84);  // 뒤 왼쪽
+      ctx.lineTo(-r * 0.26,  0);           // 뒤 중앙 노치
+      ctx.lineTo(-r * 0.72,  r * 0.84);  // 뒤 오른쪽
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = teamColor;
+      ctx.lineWidth = isSelf ? 3 : 2;
+      ctx.shadowBlur = isSelf ? 24 : 12;
+      ctx.shadowColor = teamColor;
+      ctx.stroke();
+      // 캐노피 (조종석) 하이라이트
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#ffaa7755';
+      ctx.beginPath();
+      ctx.arc(r * 0.22, 0, r * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+    } else {
+      // 히러: 크로스(십자) 형태 — 의료 십자 기호 (radius 18)
+      const arm = r * 0.38;
+      const len = r * 0.90;
+      ctx.beginPath();
+      ctx.moveTo(-arm, -len); ctx.lineTo( arm, -len);
+      ctx.lineTo( arm, -arm); ctx.lineTo( len, -arm);
+      ctx.lineTo( len,  arm); ctx.lineTo( arm,  arm);
+      ctx.lineTo( arm,  len); ctx.lineTo(-arm,  len);
+      ctx.lineTo(-arm,  arm); ctx.lineTo(-len,  arm);
+      ctx.lineTo(-len, -arm); ctx.lineTo(-arm, -arm);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // 중앙 코어 글로우
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#aaffdd66';
+      ctx.beginPath();
+      ctx.arc(0, 0, arm * 0.65, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ── 조준 방향 선 (DPS는 형태 자체가 방향 표시) ──────────────────────
+    if (p.heroClass !== 'dps') {
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#ffffff77';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(angle) * (r + 9), Math.sin(angle) * (r + 9));
+      ctx.stroke();
+    }
+
+    // ── 이름 레이블 ──────────────────────────────────────────────────────
+    ctx.shadowBlur = 0;
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = isSelf ? '#ffffff' : teamColor;
+    ctx.fillText(isSelf ? 'YOU' : p.heroClass.slice(0, 3).toUpperCase(), 0, -r - 9);
+
+    // ── HP 바 ────────────────────────────────────────────────────────────
+    const hpPct = p.maxHp > 0 ? p.hp / p.maxHp : 0;
+    const bw = r * 2.6;
+    const bx = -bw / 2;
+    const by = -r - 20;
+    ctx.fillStyle = '#111a';
+    ctx.fillRect(bx - 1, by - 1, bw + 2, 7);
+    ctx.fillStyle = hpPct > 0.5 ? '#44ff88' : hpPct > 0.25 ? '#ffaa22' : '#ff3344';
+    ctx.fillRect(bx, by, bw * hpPct, 5);
+
+    ctx.restore();
+  }
+}
+
+function drawParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= 0.92;
+    p.vy *= 0.92;
+    p.life -= p.decay;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    if (p.glow) { ctx.shadowBlur = p.size * 3; ctx.shadowColor = p.color; }
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawHitFlashes(dt) {
+  for (let i = hitFlashes.length - 1; i >= 0; i--) {
+    const hf = hitFlashes[i];
+    hf.life -= dt * 3;
+    if (hf.life <= 0) { hitFlashes.splice(i, 1); continue; }
+    ctx.save();
+    ctx.globalAlpha = hf.life;
+    ctx.fillStyle = '#ffdd00';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('-' + hf.dmg, hf.x, hf.y - (1 - hf.life) * 30 - 20);
+    ctx.restore();
+  }
+}
+
+// ── 흰색 X 히트마커 ────────────────────────────────────────────────────────────
+function drawHitMarkers(dt) {
+  for (let i = hitMarkers.length - 1; i >= 0; i--) {
+    const hm = hitMarkers[i];
+    hm.life -= dt * 7;  // 빠른 플래시 (~140ms)
+    if (hm.life <= 0) { hitMarkers.splice(i, 1); continue; }
+    const sz = 7 + (1 - hm.life) * 4; // 살짝 커지면서 사라짐
+    ctx.save();
+    ctx.globalAlpha = hm.life * 0.9;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ffffff';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(hm.x - sz, hm.y - sz); ctx.lineTo(hm.x + sz, hm.y + sz);
+    ctx.moveTo(hm.x + sz, hm.y - sz); ctx.lineTo(hm.x - sz, hm.y + sz);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ── Tank quake 지면 파문 링 ────────────────────────────────────────────────────
+function drawGroundRipples(dt) {
+  for (let i = groundRipples.length - 1; i >= 0; i--) {
+    const r = groundRipples[i];
+    if (r.delay > 0) { r.delay -= dt; continue; }
+    r.radius += dt * 280;
+    r.life -= dt * 1.1;
+    if (r.life <= 0 || r.radius > r.maxRadius + 10) { groundRipples.splice(i, 1); continue; }
+    ctx.save();
+    ctx.globalAlpha = r.life * 0.75;
+    ctx.strokeStyle = r.color;
+    ctx.lineWidth = 3.5 * r.life;
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = r.color;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    // 이중 링 (안쪽 보조선)
+    if (r.radius > 14) {
+      ctx.globalAlpha = r.life * 0.3;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.radius * 0.72, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+// ── Start render loop ──────────────────────────────────────────────────────────
+requestAnimationFrame(render);
+
+// ── Cold-start splash + server ping ───────────────────────────────────────────
+(function initSplashPing() {
+  const splash   = document.getElementById('splashOverlay');
+  const heroDiv  = document.getElementById('heroSelect');
+  const msgEl    = document.getElementById('splashMsg');
+
+  const MESSAGES = ['WAKING UP SERVER...', 'ALMOST READY...', 'CONNECTING...'];
+  let attempt = 0;
+  let intervalId = null;
+
+  function updateMsg() {
+    msgEl.textContent = MESSAGES[attempt % MESSAGES.length];
+  }
+
+  function hideSplash() {
+    clearInterval(intervalId);
+    splash.style.opacity = '0';
+    setTimeout(() => {
+      splash.style.display = 'none';
+      heroDiv.style.display = 'flex';
+    }, 620); // slightly past the 600ms CSS transition
+  }
+
+  async function ping() {
+    try {
+      const res = await fetch('/health', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.ok === true) {
+          hideSplash();
+          return;
+        }
+      }
+    } catch (_) { /* server not up yet */ }
+    attempt++;
+    updateMsg();
+  }
+
+  // First ping immediately, then every 1 second
+  ping();
+  intervalId = setInterval(ping, 1000);
+})();
+
+console.log('[Client] Organt Overwatch loaded');
+</script>
+</body>
+</html>
